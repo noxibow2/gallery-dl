@@ -35,6 +35,7 @@ CATEGORY_MAP = {
     "bbc"            : "BBC",
     "comicvine"      : "Comic Vine",
     "coomerparty"    : "Coomer",
+    "dcinside"       : "DcInside",
     "deltaporno"     : "DeltaPorno",
     "deviantart"     : "DeviantArt",
     "drawfriends"    : "Draw Friends",

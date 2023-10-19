@@ -32,6 +32,7 @@ modules = [
     "comicvine",
     "cyberdrop",
     "danbooru",
+    "dcinside",
     "desktopography",
     "deviantart",
     "dynastyscans",
