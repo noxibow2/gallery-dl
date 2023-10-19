@@ -26,7 +26,8 @@ class DcPostExtractor(DcInsideBase, GalleryExtractor):
     directory_fmt = ("{category}", "{board[id]}",
                      "{post[date]:%Y-%m-%d} {post[title]}")
     archive_fmt = "{blog[id]}_{post[num]}_{num}"
-    pattern = BASE_PATTERN + r"(mgallery/)?(mini/)?board/view/\?id=(\w+)&no=(\d+)"
+    pattern = BASE_PATTERN + \
+                r"(mgallery/)?(mini/)?board/view/\?id=(\w+)&no=(\d+)"
     example = "https://gall.dcinside.com/board/view/?id=BOARDID&no=12345"
 
     def __init__(self, match):
@@ -99,52 +100,65 @@ class DcPostExtractor(DcInsideBase, GalleryExtractor):
         return images + videos + embeded
 
 
-# class NaverBlogExtractor(NaverBase, Extractor):
-#     """Extractor for a user's blog on blog.naver.com"""
-#     subcategory = "blog"
-#     categorytransfer = True
-#     pattern = (r"(?:https?://)?blog\.naver\.com/"
-#                r"(?:PostList.nhn\?(?:[^&#]+&)*blogId=([^&#]+)|(\w+)/?$)")
-#     example = "https://blog.naver.com/BLOGID"
+class DcBoardExtractor(DcInsideBase, Extractor):
+    """Extractor for a board on gall.dcinside.com"""
+    subcategory = "board"
+    categorytransfer = True
+    pattern = BASE_PATTERN + \
+    r"(mgallery/)?(mini/)?board/lists/\?id=(\w+)(&page=(\d+))?"
+    example = "https://gall.dcinside.com/board/view/?id=BOARDID&no=12345"
 
-#     def __init__(self, match):
-#         Extractor.__init__(self, match)
-#         self.blog_id = match.group(1) or match.group(2)
+    def __init__(self, match):
+        Extractor.__init__(self, match)
+        self.url = match.group(0)
+        self.mgal = match.group(1)
+        self.mini = match.group(2)
+        self.board_id = match.group(3)
+        self.page_index = int(match.group(5)) if match.group(5) else 1
 
-#     def items(self):
+    def items(self):
 
-#         # fetch first post number
-#         url = "{}/PostList.nhn?blogId={}".format(self.root, self.blog_id)
-#         post_num = text.extract(
-#             self.request(url).text, 'gnFirstLogNo = "', '"',
-#         )[0]
+        # fetch first post number
+        board_url = self.url
+        
+        base_post_url = 'https://gall.dcinside.com/'
+        base_post_url += self.mgal if self.mgal else ""
+        base_post_url += self.mini if self.mini else ""
+        
+        base_list_url = base_post_url + f'board/lists/?id='
+        base_post_url = base_post_url + f'board/view/?id='
+        total_pages = None
 
-#         # setup params for API calls
-#         url = "{}/PostViewBottomTitleListAsync.nhn".format(self.root)
-#         params = {
-#             "blogId"             : self.blog_id,
-#             "logNo"              : post_num or "0",
-#             "viewDate"           : "",
-#             "categoryNo"         : "",
-#             "parentCategoryNo"   : "",
-#             "showNextPage"       : "true",
-#             "showPreviousPage"   : "false",
-#             "sortDateInMilli"    : "",
-#             "isThumbnailViewType": "false",
-#             "countPerPage"       : "",
-#         }
+        page = self.request(board_url).text
+        total_pages = int(text.extr(page, 'total_page">', '<', 1))
 
-#         # loop over all posts
-#         while True:
-#             data = self.request(url, params=params).json()
 
-#             for post in data["postList"]:
-#                 post["url"] = "{}/PostView.nhn?blogId={}&logNo={}".format(
-#                     self.root, self.blog_id, post["logNo"])
-#                 post["_extractor"] = NaverPostExtractor
-#                 yield Message.Queue, post["url"], post
+        # loop over all posts
+        while True:
+            page = self.request(board_url).text
+            # f = open("page.html", "x")
+            # f.write()
+            if self.mgal:
+                print(self.mgal)
+                post_links = [link for link in text.extract_iter(page, 
+                    f'href="/{self.mgal}board/view/?id=' , '"')]
+            elif self.mini:
+                post_links = [link for link in text.extract_iter(page, 
+                    f'href="/{self.mini}board/view/?id=' , '"')]
+            else:
+                post_links = [link for link in text.extract_iter(page, 
+                    f'href="/board/view/?id=' , '"')]
+            
+            for link in post_links:
+                post = {}
+                post["url"] = base_post_url + link
+                post["_extractor"] = DcPostExtractor
+                yield Message.Queue, post["url"], post
 
-#             if not data["hasNextPage"]:
-#                 return
-#             params["logNo"] = data["nextIndexLogNo"]
-#             params["sortDateInMilli"] = data["nextIndexSortDate"]
+            if self.page_index >= total_pages:
+                return
+
+            # go to next page
+            self.page_index += 1
+            board_url = base_list_url + \
+                 f"{self.board_id}&page={str(self.page_index)}"
